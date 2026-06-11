@@ -24,7 +24,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/<repo>
+        repoURL: https://github.com/jtarang/nebula-kargo-quickstart
         targetRevision: env/{{env}}
         path: .
       destination:
