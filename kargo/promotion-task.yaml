@@ -1,0 +1,55 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: PromotionTask
+metadata:
+  name: promote-guestbook
+  namespace: kargo-simple
+spec:
+  # Inputs. gitRepo and imageRepo are the same for every stage, so they get
+  # defaults here and only `env` has to be supplied at the call site.
+  vars:
+  - name: env
+  - name: gitRepo
+    value: https://github.com/jtarang/nebula-kargo-quickstart
+  - name: imageRepo
+    value: ghcr.io/jtarang/guestbook
+  steps:
+  - uses: git-clone
+    config:
+      repoURL: ${{ vars.gitRepo }}
+      checkout:
+      - branch: main
+        path: ./src
+      - branch: env/${{ vars.env }}
+        create: true
+        path: ./out
+  - uses: git-clear
+    config:
+      path: ./out
+  - uses: kustomize-set-image
+    as: update-image
+    config:
+      path: ./src/app/env/${{ vars.env }}
+      images:
+      - image: ${{ vars.imageRepo }}
+        tag: ${{ imageFrom(vars.imageRepo).Tag }}
+  - uses: kustomize-build
+    config:
+      path: ./src/app/env/${{ vars.env }}
+      outPath: ./out/manifests.yaml
+  - uses: git-commit
+    as: commit
+    config:
+      path: ./out
+      # Within a PromotionTask, step outputs must be referenced via `task.outputs`.
+      message: ${{ task.outputs['update-image'].commitMessage }}
+  - uses: git-push
+    config:
+      path: ./out
+      targetBranch: env/${{ vars.env }}
+  - uses: argocd-update
+    config:
+      apps:
+      - name: guestbook-simple-${{ vars.env }}
+        sources:
+        - repoURL: ${{ vars.gitRepo }}
+          desiredRevision: ${{ task.outputs.commit.commit }}
